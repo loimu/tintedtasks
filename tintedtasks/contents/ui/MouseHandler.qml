@@ -95,25 +95,25 @@ Item {
             // TODO: This restriction (minus the timer, which improves things)
             // has been proven out in the EITM fork, but could be improved later
             // by tracking the cursor movement vector and allowing the drag if
-            // the movement direction has reversed, etablishing user intent to
+            // the movement direction has reversed, establishing user intent to
             // move back.
             if (!plasmoid.configuration.separateLaunchers && tasks.dragSource != null
                  && tasks.dragSource.m.IsLauncher === true && above.m.IsLauncher !== true
-                 && above == ignoredItem) {
+                 && above === ignoredItem) {
                 return;
             } else {
                 ignoredItem = null;
             }
 
-            if (tasksModel.sortMode == TaskManager.TasksModel.SortManual && tasks.dragSource) {
+            if (tasksModel.sortMode === TaskManager.TasksModel.SortManual && tasks.dragSource) {
                 // Reject drags between different TaskList instances.
-                if (tasks.dragSource.parent != above.parent) {
+                if (tasks.dragSource.parent !== above.parent) {
                     return;
                 }
 
                 var insertAt = TaskTools.insertIndexAt(above, event.x, event.y);
 
-                if (tasks.dragSource != above && tasks.dragSource.itemIndex != insertAt) {
+                if (tasks.dragSource !== above && tasks.dragSource.itemIndex !== insertAt) {
                     if (groupDialog.visible && groupDialog.visualParent) {
                         tasksModel.move(tasks.dragSource.itemIndex, insertAt,
                             tasksModel.makeModelIndex(groupDialog.visualParent.itemIndex));
@@ -124,7 +124,7 @@ Item {
                     ignoredItem = above;
                     ignoreItemTimer.restart();
                 }
-            } else if (!tasks.dragSource && hoveredItem != above) {
+            } else if (!tasks.dragSource && hoveredItem !== above) {
                 hoveredItem = above;
                 activationTimer.restart();
             }

@@ -29,15 +29,19 @@ import org.kde.plasma.private.taskmanager 0.1 as TaskManagerApplet
 import "code/layout.js" as LayoutManager
 import "code/tools.js" as TaskTools
 
-Item {
+MouseArea {
     id: tasks
 
     anchors.fill: parent
+    hoverEnabled: true
 
-    property bool vertical: (plasmoid.formFactor == PlasmaCore.Types.Vertical)
-    property bool iconsOnly: (true) // TODO: needs an entry in the Settings
+    property bool vertical: (plasmoid.formFactor === PlasmaCore.Types.Vertical)
+    property bool iconsOnly: true // TODO: needs an entry in the Settings
 
     property QtObject contextMenuComponent: Qt.createComponent("ContextMenu.qml");
+
+    property bool needLayoutRefresh: false;
+    property variant taskClosedWithMouseMiddleButton: []
 
     Plasmoid.preferredRepresentation: Plasmoid.fullRepresentation
 
@@ -85,6 +89,13 @@ Item {
         }
     }
 
+    onExited: {
+        if (needLayoutRefresh) {
+            LayoutManager.layout(taskRepeater)
+            needLayoutRefresh = false;
+        }
+    }
+
     TaskManager.TasksModel {
         id: tasksModel
 
@@ -120,15 +131,14 @@ Item {
         launchInPlace: iconsOnly
         separateLaunchers: {
             if (!iconsOnly && !plasmoid.configuration.separateLaunchers
-                && plasmoid.configuration.sortingStrategy == 1) {
+                && plasmoid.configuration.sortingStrategy === 1) {
                 return false;
             }
 
             return true;
         }
 
-        groupMode: iconsOnly ? TaskManager.TasksModel.GroupApplications
-            : groupModeEnumValue(plasmoid.configuration.groupingStrategy)
+        groupMode: groupModeEnumValue(plasmoid.configuration.groupingStrategy)
         groupInline: !plasmoid.configuration.groupPopups
         groupingWindowTasksThreshold: (plasmoid.configuration.onlyGroupWhenFull && !iconsOnly
             ? LayoutManager.optimumCapacity(width, height) + 1 : -1)
@@ -221,7 +231,7 @@ Item {
         engine: "mpris2"
         connectedSources: sources
         function sourceNameForLauncherUrl(launcherUrl, pid) {
-            if (!launcherUrl || launcherUrl == "") {
+            if (!launcherUrl || launcherUrl === "") {
                 return "";
             }
 
@@ -240,11 +250,11 @@ Item {
                 }
 
                 var sourceData = data[source];
-                if (!sourceData || sourceData.DesktopEntry !== desktopFileName) {
+                if (!sourceData) {
                     continue;
                 }
 
-                if (pid === undefined || sourceData.InstancePid === pid) {
+                if (sourceData.DesktopEntry === desktopFileName || (pid && sourceData.InstancePid === pid)) {
                     return source;
                 }
 
@@ -439,7 +449,15 @@ Item {
 
             delegate: Task {}
             onItemAdded: taskList.layout()
-            onItemRemoved: taskList.layout()
+            onItemRemoved: {
+                if (tasks.containsMouse && index != taskRepeater.count &&
+                    item.winIdList.length > 0 && taskClosedWithMouseMiddleButton.indexOf(item.winIdList[0]) > -1) {
+                    needLayoutRefresh = true;
+                } else {
+                    taskList.layout();
+                }
+                taskClosedWithMouseMiddleButton = [];
+            }
         }
     }
 

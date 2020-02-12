@@ -1,0 +1,218 @@
+diff --git a/applets/taskmanager/package/contents/config/main.xml b/applets/taskmanager/package/contents/config/main.xml
+index 895c13f48..bb782232d 100644
+--- a/applets/taskmanager/package/contents/config/main.xml
++++ b/applets/taskmanager/package/contents/config/main.xml
+@@ -10,10 +10,6 @@
+       <label>Whether to show only window tasks that are on the same screen as the widget.</label>
+       <default>false</default>
+     </entry>
+-    <entry name="showOnlyCurrentDesktop" type="Bool">
+-      <label>Whether to only show tasks that are on the current virtual desktop.</label>
+-      <default>false</default>
+-    </entry>
+     <entry name="showOnlyCurrentActivity" type="Bool">
+       <label>Whether to show only tasks that are on the current activity.</label>
+       <default>true</default>
+@@ -63,10 +59,6 @@
+       <label>Whether to show tooltips when hovering task buttons.</label>
+       <default>true</default>
+     </entry>
+-    <entry name="wheelEnabled" type="Bool">
+-      <label>Whether using the mouse wheel with the mouse pointer above the widget should switch between tasks.</label>
+-      <default>true</default>
+-    </entry>
+     <entry name="highlightWindows" type="Bool">
+       <label>Whether to request the window manager highlight windows when hovering corresponding task buttons.</label>
+       <default>false</default>
+@@ -75,17 +67,6 @@
+       <label>The list of launcher tasks on the widget. Usually .desktop file or executable URLs. Special URLs such as preferred://browser that expand to default applications are supported.</label>
+       <default></default>
+     </entry>
+-    <entry name="middleClickAction" type="Enum">
+-      <label>What to do on middle-mouse click on a task button.</label>
+-      <choices>
+-            <choice name="None"/>
+-            <choice name="Close"/>
+-            <choice name="NewInstance"/>
+-            <choice name="ToggleMinimized"/>
+-            <choice name="ToggleGrouping"/>
+-      </choices>
+-      <default>0</default>
+-    </entry>
+     <entry name="smartLaunchersEnabled" type="Bool">
+       <label>Whether to show progress and status information on task buttons.</label>
+       <default>true</default>
+diff --git a/applets/taskmanager/package/contents/ui/ConfigGeneral.qml b/applets/taskmanager/package/contents/ui/ConfigGeneral.qml
+index 34c957c71..5145cb390 100644
+--- a/applets/taskmanager/package/contents/ui/ConfigGeneral.qml
++++ b/applets/taskmanager/package/contents/ui/ConfigGeneral.qml
+@@ -34,19 +34,16 @@ Item {
+     property alias cfg_forceStripes: forceStripes.checked
+     property alias cfg_iconSize: iconSize.value
+     property alias cfg_showToolTips: showToolTips.checked
+-    property alias cfg_wheelEnabled: wheelEnabled.checked
+     property alias cfg_highlightWindows: highlightWindows.checked
+     property alias cfg_smartLaunchersEnabled: smartLaunchers.checked
+     property bool cfg_indicateAudioStreams
+     property alias cfg_maxStripes: maxStripes.value
+     property alias cfg_groupingStrategy: groupingStrategy.currentIndex
+-    property alias cfg_middleClickAction: middleClickAction.currentIndex
+     property alias cfg_groupPopups: groupPopups.checked
+     property alias cfg_onlyGroupWhenFull: onlyGroupWhenFull.checked
+     property alias cfg_sortingStrategy: sortingStrategy.currentIndex
+     property alias cfg_separateLaunchers: separateLaunchers.checked
+     property alias cfg_showOnlyCurrentScreen: showOnlyCurrentScreen.checked
+-    property alias cfg_showOnlyCurrentDesktop: showOnlyCurrentDesktop.checked
+     property alias cfg_showOnlyCurrentActivity: showOnlyCurrentActivity.checked
+     property alias cfg_showOnlyMinimized: showOnlyMinimized.checked
+ 
+@@ -125,11 +122,6 @@ Item {
+                     text: i18n("Show tooltips")
+                 }
+ 
+-                CheckBox {
+-                    id: wheelEnabled
+-                    text: i18n("Cycle through tasks with mouse wheel")
+-                }
+-
+                 CheckBox {
+                     id: highlightWindows
+                     text: i18n("Highlight windows")
+@@ -149,24 +141,6 @@ Item {
+                     onCheckedChanged: cfg_indicateAudioStreams = checked
+                     enabled: plasmaPaAvailable
+                 }
+-
+-                RowLayout {
+-                    Label {
+-                        text: i18n("On middle-click:")
+-                    }
+-
+-                    ComboBox {
+-                        id: middleClickAction
+-                        Layout.fillWidth: true
+-                        model: [
+-                            i18nc("The click action", "None"),
+-                            i18n("Close Window or Group"),
+-                            i18n("New Instance"),
+-                            i18n("Minimize/Restore Window or Group"),
+-                            i18nc("When clicking it would toggle grouping windows of a specific app", "Group/Ungroup")
+-                        ]
+-                    }
+-                }
+             }
+         }
+ 
+@@ -262,11 +236,6 @@ Item {
+                     text: i18n("Show only tasks from the current screen")
+                 }
+ 
+-                CheckBox {
+-                    id: showOnlyCurrentDesktop
+-                    text: i18n("Show only tasks from the current desktop")
+-                }
+-
+                 CheckBox {
+                     id: showOnlyCurrentActivity
+                     text: i18n("Show only tasks from the current activity")
+diff --git a/applets/taskmanager/package/contents/ui/Task.qml b/applets/taskmanager/package/contents/ui/Task.qml
+index d23dc66e5..633db6637 100644
+--- a/applets/taskmanager/package/contents/ui/Task.qml
++++ b/applets/taskmanager/package/contents/ui/Task.qml
+@@ -131,11 +131,11 @@ MouseArea {
+     }
+ 
+     onPressed: {
+-        if (mouse.button == Qt.LeftButton || mouse.button == Qt.MidButton || mouse.button === Qt.BackButton || mouse.button === Qt.ForwardButton) {
++        if (mouse.button == Qt.LeftButton || mouse.button == Qt.RightButton || mouse.button === Qt.BackButton || mouse.button === Qt.ForwardButton) {
+             pressed = true;
+             pressX = mouse.x;
+             pressY = mouse.y;
+-        } else if (mouse.button == Qt.RightButton) {
++        } else if (mouse.button == Qt.MidButton) {
+             // When we're a launcher, there's no window controls, so we can show all
+             // places without the menu getting super huge.
+             if (model.IsLauncher === true) {
+@@ -148,16 +148,8 @@ MouseArea {
+ 
+     onReleased: {
+         if (pressed) {
+-            if (mouse.button == Qt.MidButton) {
+-                if (plasmoid.configuration.middleClickAction == TaskManagerApplet.Backend.NewInstance) {
+-                    tasksModel.requestNewInstance(modelIndex());
+-                } else if (plasmoid.configuration.middleClickAction == TaskManagerApplet.Backend.Close) {
+-                    tasksModel.requestClose(modelIndex());
+-                } else if (plasmoid.configuration.middleClickAction == TaskManagerApplet.Backend.ToggleMinimized) {
+-                    tasksModel.requestToggleMinimized(modelIndex());
+-                } else if (plasmoid.configuration.middleClickAction == TaskManagerApplet.Backend.ToggleGrouping) {
+-                    tasksModel.requestToggleGrouping(modelIndex());
+-                }
++            if (mouse.button == Qt.RightButton) {
++                tasksModel.requestClose(modelIndex());
+             } else if (mouse.button == Qt.LeftButton) {
+                 TaskTools.activateTask(modelIndex(), model, mouse.modifiers, task);
+                 if (plasmoid.configuration.showToolTips) {
+@@ -198,10 +190,19 @@ MouseArea {
+     }
+ 
+     onWheel: {
+-        if (plasmoid.configuration.wheelEnabled && (!inPopup || !groupDialog.overflowing)) {
+-            wheelDelta = TaskTools.wheelActivateNextPrevTask(task, wheelDelta, wheel.angleDelta.y);
+-        } else {
+-            wheel.accepted = false;
++        if (wheel.angleDelta.y > 0) {
++            if (model.IsActive === false) {
++                tasksModel.requestToggleMinimized(modelIndex());
++                tasksModel.requestActivate(modelIndex());
++            }
++        }
++        else if (wheel.angleDelta.y < 0) {
++            if (model.IsMinimized === false) {
++                tasksModel.requestToggleMinimized(modelIndex());
++            }
++        }
++        if (plasmoid.configuration.showToolTips) {
++            hideToolTipTemporarily();
+         }
+     }
+ 
+diff --git a/applets/taskmanager/package/contents/ui/ToolTipInstance.qml b/applets/taskmanager/package/contents/ui/ToolTipInstance.qml
+index 1d8e7ad53..9908e2ad6 100644
+--- a/applets/taskmanager/package/contents/ui/ToolTipInstance.qml
++++ b/applets/taskmanager/package/contents/ui/ToolTipInstance.qml
+@@ -441,13 +441,6 @@ Column {
+             virtualDesktopNameList.push(virtualDesktopInfo.desktopNames[virtualDesktops[i] - 1]);
+         }
+ 
+-        if (!plasmoid.configuration.showOnlyCurrentDesktop
+-            && virtualDesktopInfo.numberOfDesktops > 1
+-            && (isGroup ? IsOnAllVirtualDesktops : isOnAllVirtualDesktopsParent) !== true
+-            && virtualDesktops.length > 0) {
+-            subTextEntries.push(i18nc("Comma-separated list of desktops", "On %1", virtualDesktopNameList.join()));
+-        }
+-
+         var act = isGroup ? Activities : activitiesParent;
+         if (act == undefined) {
+             return subTextEntries.join("\n");
+diff --git a/applets/taskmanager/package/contents/ui/main.qml b/applets/taskmanager/package/contents/ui/main.qml
+index 97a9c0138..078d24067 100644
+--- a/applets/taskmanager/package/contents/ui/main.qml
++++ b/applets/taskmanager/package/contents/ui/main.qml
+@@ -35,7 +35,7 @@ Item {
+     anchors.fill: parent
+ 
+     property bool vertical: (plasmoid.formFactor == PlasmaCore.Types.Vertical)
+-    property bool iconsOnly: (plasmoid.pluginName == "org.kde.plasma.icontasks")
++    property bool iconsOnly: (true) // TODO: needs an entry in the Settings
+ 
+     property QtObject contextMenuComponent: Qt.createComponent("ContextMenu.qml");
+ 
+@@ -110,7 +110,7 @@ Item {
+         screenGeometry: plasmoid.screenGeometry
+         activity: activityInfo.currentActivity
+ 
+-        filterByVirtualDesktop: plasmoid.configuration.showOnlyCurrentDesktop
++        filterByVirtualDesktop: false // TODO: remove completely
+         filterByScreen: plasmoid.configuration.showOnlyCurrentScreen
+         filterByActivity: plasmoid.configuration.showOnlyCurrentActivity
+         filterNotMinimized: plasmoid.configuration.showOnlyMinimized

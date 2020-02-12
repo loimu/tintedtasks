@@ -41,12 +41,13 @@ MouseArea {
 
     readonly property var m: model
 
-    readonly property int pid: model.AppPid != undefined ? model.AppPid : 0
+    readonly property int pid: model.AppPid !== undefined ? model.AppPid : 0
     readonly property string appName: model.AppName
+    readonly property variant winIdList: model.WinIdList
     property int itemIndex: index
     property bool inPopup: false
     property bool isWindow: model.IsWindow === true
-    property int childCount: model.ChildCount != undefined ? model.ChildCount : 0
+    property int childCount: model.ChildCount !== undefined ? model.ChildCount : 0
     property int previousChildCount: 0
     property alias labelText: label.text
     property bool pressed: false
@@ -54,7 +55,7 @@ MouseArea {
     property int pressY: -1
     property QtObject contextMenu: null
     property int wheelDelta: 0
-    readonly property bool smartLauncherEnabled: plasmoid.configuration.smartLaunchersEnabled && !inPopup && model.IsStartup !== true
+    readonly property bool smartLauncherEnabled: !inPopup && model.IsStartup !== true
     property QtObject smartLauncherItem: null
     property alias toolTipAreaItem: toolTipArea
 
@@ -341,13 +342,13 @@ MouseArea {
                         return model.AppName;
                     });
                     toolTipDelegate.pidParent = Qt.binding(function() {
-                        return model.AppPid;
+                        return model.AppPid !== undefined ? model.AppPid : 0;
                     });
                     toolTipDelegate.windows = Qt.binding(function() {
                         return model.WinIdList;
                     });
                     toolTipDelegate.isGroup = Qt.binding(function() {
-                        return model.IsGroupParent == true;
+                        return model.IsGroupParent === true;
                     });
                     toolTipDelegate.icon = Qt.binding(function() {
                         return model.decoration;
@@ -356,10 +357,10 @@ MouseArea {
                         return model.LauncherUrlWithoutIcon;
                     });
                     toolTipDelegate.isLauncher = Qt.binding(function() {
-                        return model.IsLauncher == true;
+                        return model.IsLauncher === true;
                     });
                     toolTipDelegate.isMinimizedParent = Qt.binding(function() {
-                        return model.IsMinimized == true;
+                        return model.IsMinimized === true;
                     });
                     toolTipDelegate.displayParent = Qt.binding(function() {
                         return model.display;
@@ -368,17 +369,17 @@ MouseArea {
                         return model.GenericName;
                     });
                     toolTipDelegate.virtualDesktopParent = Qt.binding(function() {
-                        return (model.VirtualDesktops != undefined || model.VirtualDesktops.length == 0) ? model.VirtualDesktops : [0];
+                        return (model.VirtualDesktops !== undefined && model.VirtualDesktops.length > 0) ? model.VirtualDesktops : [0];
                     });
                     toolTipDelegate.isOnAllVirtualDesktopsParent = Qt.binding(function() {
-                        return model.IsOnAllVirtualDesktops == true;
+                        return model.IsOnAllVirtualDesktops === true;
                     });
                     toolTipDelegate.activitiesParent = Qt.binding(function() {
                         return model.Activities;
                     });
 
                     toolTipDelegate.smartLauncherCountVisible = Qt.binding(function() {
-                        return plasmoid.configuration.smartLaunchersEnabled && task.smartLauncherItem && task.smartLauncherItem.countVisible;
+                        return task.smartLauncherItem && task.smartLauncherItem.countVisible;
                     });
                     toolTipDelegate.smartLauncherCount = Qt.binding(function() {
                         return toolTipDelegate.smartLauncherCountVisible ? task.smartLauncherItem.count : 0;
@@ -392,7 +393,7 @@ MouseArea {
         anchors.fill: frame
         asynchronous: true
         source: "TaskProgressOverlay.qml"
-        active: plasmoid.configuration.smartLaunchersEnabled && task.smartLauncherItem && task.smartLauncherItem.progressVisible
+        active: task.isWindow && task.smartLauncherItem && task.smartLauncherItem.progressVisible
     }
 
     Item {
@@ -445,7 +446,7 @@ MouseArea {
             height: parent.height
             asynchronous: true
             source: "TaskBadgeOverlay.qml"
-            active: plasmoid.configuration.smartLaunchersEnabled && height >= units.iconSizes.small
+            active: height >= units.iconSizes.small
                     && task.smartLauncherItem && task.smartLauncherItem.countVisible
         }
 
@@ -454,7 +455,7 @@ MouseArea {
             // the text label margin, which derives from the icon width.
             State {
                 name: "standalone"
-                when: !label.visible && !audioStreamIconLoader.shown
+                when: !label.visible
 
                 AnchorChanges {
                     target: iconBox
@@ -491,13 +492,14 @@ MouseArea {
         readonly property bool shown: item && item.visible
 
         source: "AudioStream.qml"
-        width: units.roundToIconSize(Math.min(Math.min(iconBox.width, iconBox.height), units.iconSizes.smallMedium))
+        width: Math.min(Math.min(iconBox.width, iconBox.height) * 0.45, units.iconSizes.smallMedium)
         height: width
 
         anchors {
-            right: parent.right
-            rightMargin: iconBox.adjustMargin(true, parent.width, taskFrame.margins.right)
-            verticalCenter: parent.verticalCenter
+            right: frame.right
+            top: frame.top
+            rightMargin: iconBox.adjustMargin(true, parent.width, taskFrame.margins.right) + units.smallSpacing / 2
+            topMargin: iconBox.adjustMargin(true, parent.width, taskFrame.margins.top) + units.smallSpacing / 2
         }
     }
 

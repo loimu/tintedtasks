@@ -106,6 +106,7 @@ Column {
             }
             // window title
             PlasmaExtras.Heading {
+                id: winTitle
                 level: 5
                 width: isWin ? textWidth : undefined
                 height: undefined
@@ -114,6 +115,7 @@ Column {
                 text: generateTitle()
                 textFormat: Text.PlainText
                 opacity: 0.75
+                visible: !hasPlayer
             }
             // subtext
             PlasmaExtras.Heading {
@@ -130,36 +132,30 @@ Column {
         }
 
         // Count badge.
-        Badge {
+        Item {
             Layout.alignment: Qt.AlignRight | Qt.AlignTop
-            height: units.iconSizes.smallMedium
-            visible: flatIndex === 0 && smartLauncherCountVisible
-            number: smartLauncherCount
+            Layout.preferredHeight: closeButton.height
+            Layout.preferredWidth: closeButton.width
+
+            Badge {
+                anchors.centerIn: parent
+                height: units.iconSizes.smallMedium
+                visible: flatIndex === 0 && smartLauncherCountVisible
+                number: smartLauncherCount
+            }
         }
 
         // close button
-        MouseArea {
+        PlasmaComponents.ToolButton {
+            id: closeButton
             Layout.alignment: Qt.AlignRight | Qt.AlignTop
-
-            height: units.iconSizes.smallMedium
-            width: height
-
             visible: isWin
-
-            acceptedButtons: Qt.LeftButton
-            hoverEnabled: true
+            iconSource: "window-close"
             onClicked: {
                 backend.cancelHighlightWindows();
                 tasksModel.requestClose(submodelIndex);
             }
 
-            PlasmaCore.IconItem {
-                anchors.fill: parent
-                active: parent.containsMouse
-
-                source: "window-close"
-                animated: false
-            }
         }
     }
 
@@ -169,7 +165,7 @@ Column {
         width: header.width
         // similar to 0.5625 = 1 / (16:9) as most screens are
         // round necessary, otherwise shadow mask for players has gap!
-        height: Math.round(0.5 * width)
+        height: Math.round(0.5 * width) + (!winTitle.visible? Math.round(winTitle.height) : 0)
         anchors.horizontalCenter: parent.horizontalCenter
 
         visible: isWin
@@ -180,19 +176,35 @@ Column {
 
             readonly property bool isMinimized: isGroup ? IsMinimized == true : isMinimizedParent
             // TODO: this causes XCB error message when being visible the first time
-            property int winId: isWin && windows[flatIndex] != undefined ? windows[flatIndex] : 0
+            property int winId: isWin && windows[flatIndex] !== undefined ? windows[flatIndex] : 0
+
+            PlasmaComponents.Highlight {
+                anchors.fill: hoverHandler
+                visible: hoverHandler.containsMouse
+                pressed: hoverHandler.containsPress
+            }
 
             PlasmaCore.WindowThumbnail {
-                anchors.fill: parent
+                anchors.fill: hoverHandler
+                // Indent by one pixel to make sure we never cover up the entire highlight
+                anchors.margins: 1
 
                 visible: !albumArtImage.visible && !thumbnailSourceItem.isMinimized
                 winId: thumbnailSourceItem.winId
+            }
 
-                ToolTipWindowMouseArea {
+            Image {
+                id: albumArtBackground
+                source: albumArt
+                anchors.fill: parent
+                fillMode: Image.PreserveAspectCrop
+                visible: albumArtImage.available
+                layer.enabled: true
+                opacity: 0.25
+                layer.effect: FastBlur {
+                    source: albumArtBackground
                     anchors.fill: parent
-                    rootTask: parentTask
-                    modelIndex: submodelIndex
-                    winId: thumbnailSourceItem.winId
+                    radius: 30
                 }
             }
 
@@ -201,40 +213,45 @@ Column {
                 // also Image.Loading to prevent loading thumbnails just because the album art takes a split second to load
                 readonly property bool available: status === Image.Ready || status === Image.Loading
 
-                anchors.fill: parent
+                anchors.fill: hoverHandler
+                // Indent by one pixel to make sure we never cover up the entire highlight
+                anchors.margins: 1
                 sourceSize: Qt.size(parent.width, parent.height)
+
                 asynchronous: true
                 source: albumArt
-                fillMode: Image.PreserveAspectCrop
+                fillMode: Image.PreserveAspectFit
                 visible: available
-
-                ToolTipWindowMouseArea {
-                    anchors.fill: parent
-                    rootTask: parentTask
-                    modelIndex: submodelIndex
-                    winId: thumbnailSourceItem.winId
-                }
             }
 
             // when minimized, we don't have a preview, so show the icon
             PlasmaCore.IconItem {
-                anchors.fill: parent
+                width: parent.width
+                height: thumbnail.height - playerControlsLoader.realHeight
+                anchors.horizontalCenter: parent.horizontalCenter
                 source: thumbnailSourceItem.isMinimized && !albumArtImage.visible ? icon : ""
                 animated: false
                 usesPlasmaTheme: false
                 visible: valid
+            }
 
-                ToolTipWindowMouseArea {
-                    anchors.fill: parent
-                    rootTask: parentTask
-                    modelIndex: submodelIndex
-                    winId: thumbnailSourceItem.winId
-                }
+            ToolTipWindowMouseArea {
+                id: hoverHandler
+                anchors.fill: parent
+                // Don't go under the player controls bar, when it's visible
+                anchors.bottomMargin: playerControlsLoader.realHeight
+                rootTask: parentTask
+                modelIndex: submodelIndex
+                winId: thumbnailSourceItem.winId
             }
         }
 
 
         Loader {
+            id: playerControlsLoader
+
+            property real realHeight: item? item.realHeight : 0
+
             anchors.fill: thumbnail
             sourceComponent: hasPlayer ? playerControlsComp : undefined
         }
@@ -243,6 +260,8 @@ Column {
             id: playerControlsComp
 
             Item {
+                property real realHeight: playerControlsRow.height
+
                 anchors.fill: parent
 
                 // TODO: When could this really be the case? A not-launcher-task always has a window!?
@@ -298,52 +317,40 @@ Column {
                     enabled: canControl
 
                     ColumnLayout {
+                        Layout.leftMargin: 2
                         Layout.fillWidth: true
                         spacing: 0
 
-                        PlasmaExtras.Heading {
+                        PlasmaComponents.Label {
                             Layout.fillWidth: true
-                            level: 4
-                            wrapMode: Text.NoWrap
+                            lineHeight: 1
+                            maximumLineCount: artistText.visible? 1 : 2
+                            wrapMode: artistText.visible? Text.NoWrap : Text.Wrap
                             elide: Text.ElideRight
                             text: track || ""
                         }
 
-                        PlasmaExtras.Heading {
+                        PlasmaExtras.DescriptiveLabel {
+                            id: artistText
                             Layout.fillWidth: true
-                            level: 5
                             wrapMode: Text.NoWrap
+                            lineHeight: 1
                             elide: Text.ElideRight
                             text: artist || ""
+                            visible: text != ""
+                            font.pointSize: theme.smallestFont.pointSize
                         }
                     }
 
-                    MouseArea {
-                        height: units.iconSizes.smallMedium
-                        width: height
+                    PlasmaComponents.ToolButton {
                         enabled: canGoBack
-
-                        acceptedButtons: Qt.LeftButton
-                        hoverEnabled: true
+                        iconSource: LayoutMirroring.enabled ? "media-skip-forward" : "media-skip-backward"
                         onClicked: mpris2Source.goPrevious(mprisSourceName)
-
-                        PlasmaCore.IconItem {
-                            anchors.fill: parent
-                            enabled: canGoBack
-                            active: parent.containsMouse
-
-                            source: LayoutMirroring.enabled ? "media-skip-forward" : "media-skip-backward"
-                            animated: false
-                        }
                     }
 
-                    MouseArea {
-                        height: units.iconSizes.medium
-                        width: height
+                    PlasmaComponents.ToolButton {
                         enabled: playing ? canPause : canPlay
-
-                        acceptedButtons: Qt.LeftButton
-                        hoverEnabled: true
+                        iconSource: playing ? "media-playback-pause" : "media-playback-start"
                         onClicked: {
                             if (!playing) {
                                 mpris2Source.play(mprisSourceName);
@@ -351,34 +358,12 @@ Column {
                                 mpris2Source.pause(mprisSourceName);
                             }
                         }
-
-                        PlasmaCore.IconItem {
-                            anchors.fill: parent
-                            enabled: playing ? canPause : canPlay
-                            active: parent.containsMouse
-
-                            source: playing ? "media-playback-pause" : "media-playback-start"
-                            animated: false
-                        }
                     }
 
-                    MouseArea {
-                        height: units.iconSizes.smallMedium
-                        width: height
+                    PlasmaComponents.ToolButton {
                         enabled: canGoNext
-
-                        acceptedButtons: Qt.LeftButton
-                        hoverEnabled: true
+                        iconSource: LayoutMirroring.enabled ? "media-skip-backward" : "media-skip-forward"
                         onClicked: mpris2Source.goNext(mprisSourceName)
-
-                        PlasmaCore.IconItem {
-                            anchors.fill: parent
-                            enabled: canGoNext
-                            active: parent.containsMouse
-
-                            source: LayoutMirroring.enabled ? "media-skip-backward" : "media-skip-forward"
-                            animated: false
-                        }
                     }
                 }
             }
@@ -392,7 +377,7 @@ Column {
 
         var text;
         if (isGroup) {
-            if (model.display == undefined) {
+            if (model.display === undefined) {
                 return "";
             }
             text = model.display.toString();
@@ -411,8 +396,8 @@ Column {
         text = text.replace(/\s*(?:-|—)*\s*$/, "");
 
         // Add counter back at the end.
-        if (counter != null) {
-            if (text == "") {
+        if (counter !== null) {
+            if (text === "") {
                 text = counter;
             } else {
                 text = text + " " + counter;
@@ -421,14 +406,14 @@ Column {
 
         // In case the window title had only redundant information (i.e. appName), text is now empty.
         // Add a hyphen to indicate that and avoid empty space.
-        if (text == "") {
+        if (text === "") {
             text = "—";
         }
         return text.toString();
     }
 
     function generateSubText() {
-        if (activitiesParent == undefined) {
+        if (activitiesParent === undefined) {
             return "";
         }
 
@@ -442,11 +427,11 @@ Column {
         }
 
         var act = isGroup ? Activities : activitiesParent;
-        if (act == undefined) {
+        if (act === undefined) {
             return subTextEntries.join("\n");
         }
 
-        if (act.length == 0 && activityInfo.numberOfRunningActivities > 1) {
+        if (act.length === 0 && activityInfo.numberOfRunningActivities > 1) {
             subTextEntries.push(i18nc("Which virtual desktop a window is currently on",
                 "Available on all activities"));
         } else if (act.length > 0) {
@@ -455,14 +440,14 @@ Column {
             for (var i = 0; i < act.length; i++) {
                 var activity = act[i];
                 var activityName = activityInfo.activityName(act[i]);
-                if (activityName == "") {
+                if (activityName === "") {
                     continue;
                 }
                 if (plasmoid.configuration.showOnlyCurrentActivity) {
-                    if (activity != activityInfo.currentActivity) {
+                    if (activity !== activityInfo.currentActivity) {
                         activityNames.push(activityName);
                     }
-                } else if (activity != activityInfo.currentActivity) {
+                } else if (activity !== activityInfo.currentActivity) {
                     activityNames.push(activityName);
                 }
             }
